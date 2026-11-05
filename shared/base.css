@@ -1,0 +1,43 @@
+/* Estilos comunes de todos los widgets. Colores tomados de Notion. */
+:root {
+  --bg: #ffffff;
+  --surface: #f7f6f3;
+  --text: #37352f;
+  --muted: #787774;
+  --line: rgba(55, 53, 47, 0.12);
+  --accent: #2383e2;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #191919;
+    --surface: #252525;
+    --text: rgba(255, 255, 255, 0.86);
+    --muted: rgba(255, 255, 255, 0.46);
+    --line: rgba(255, 255, 255, 0.1);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #191919;
+  --surface: #252525;
+  --text: rgba(255, 255, 255, 0.86);
+  --muted: rgba(255, 255, 255, 0.46);
+  --line: rgba(255, 255, 255, 0.1);
+  color-scheme: dark;
+}
+
+:root[data-bg="transparent"] { --bg: transparent; }
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}

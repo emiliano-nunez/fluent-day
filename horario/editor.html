@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor de horario</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+  html, body { height: auto; min-height: 100%; }
+  body { padding: 24px 16px 40px; }
+  .wrap { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start; }
+  @media (max-width: 760px) { .wrap { grid-template-columns: minmax(0, 1fr); } }
+
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+  label.h { display: block; font-size: 13px; font-weight: 600; margin: 18px 0 6px; }
+
+  textarea {
+    width: 100%;
+    min-height: 240px;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--text);
+    font: 14px/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace;
+    resize: vertical;
+  }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  .err { font-size: 12px; color: #e03e3e; margin-top: 6px; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .seg button, .days button, .btn {
+    font: inherit;
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+  }
+  .seg button.on, .days button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .days button.filled:not(.on) { border-color: var(--accent); }
+  .check { display: flex; gap: 8px; align-items: center; font-size: 14px; margin-top: 8px; cursor: pointer; }
+
+  .swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+  .swatch.on { border-color: var(--text); }
+
+  .side { position: sticky; top: 20px; }
+  .preview-box { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; height: 340px; background: var(--bg); }
+  iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .row.tools { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  input[type="time"] { font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+
+  .link { display: flex; gap: 6px; margin-top: 16px; }
+  .link input { flex: 1; min-width: 0; font-size: 12px; padding: 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .note { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <main>
+    <h1>Tu horario</h1>
+    <p class="sub">Escribí un bloque por línea. El widget muestra en qué parte del día estás.</p>
+
+    <label class="check"><input type="checkbox" id="same" checked> Mismo horario todos los días</label>
+    <div class="row days" id="days" style="margin-top:10px"></div>
+
+    <label class="h" for="text">Bloques <span id="dayLabel" style="font-weight:400;color:var(--muted)"></span></label>
+    <textarea id="text" spellcheck="false"></textarea>
+    <div class="hint">Formato: <code>08:00-09:30 Gimnasio</code> · también vale <code>8-9 Gimnasio</code> o <code>13:00 Almuerzo</code> (sin fin: dura hasta el siguiente). Podés poner emojis.</div>
+    <div class="err" id="errors"></div>
+    <div class="row" id="copyRow" style="margin-top:8px"><button class="btn" id="copyDay">Copiar este día a todos los demás</button></div>
+
+    <label class="h">Orden</label>
+    <div class="row seg" data-key="order">
+      <button data-v="past-top">Anterior arriba, próximo abajo</button>
+      <button data-v="past-bottom">Próximo arriba, anterior abajo</button>
+    </div>
+
+    <label class="h">Tema</label>
+    <div class="row seg" data-key="theme">
+      <button data-v="auto">Automático</button>
+      <button data-v="light">Claro</button>
+      <button data-v="dark">Oscuro</button>
+    </div>
+
+    <label class="h">Fondo</label>
+    <div class="row seg" data-key="bg">
+      <button data-v="solid">Sólido</button>
+      <button data-v="transparent">Transparente</button>
+    </div>
+
+    <label class="h">Color</label>
+    <div class="row" id="colors"></div>
+
+    <label class="check" style="margin-top:18px"><input type="checkbox" id="recenter" checked> Volver solo a la tarea actual después de scrollear</label>
+  </main>
+
+  <aside class="side">
+    <label class="h" style="margin-top:0">Vista previa</label>
+    <div class="preview-box"><iframe id="preview" title="Vista previa"></iframe></div>
+    <div class="row tools">
+      <label class="check" style="margin:0"><input type="checkbox" id="simulate"> Simular hora</label>
+      <input type="time" id="simTime" value="10:15" disabled>
+    </div>
+
+    <div class="link">
+      <input id="link" readonly>
+      <button class="btn primary" id="copy">Copiar link</button>
+    </div>
+    <div class="note" id="note">Pegalo en Notion con <b>/embed</b>. Si cambiás algo, copiá el link de nuevo y reemplazalo en el embed.</div>
+  </aside>
+</div>
+
+<script src="../shared/params.js"></script>
+<script src="schedule.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const DAYS = [[1, "Lun"], [2, "Mar"], [3, "Mié"], [4, "Jue"], [5, "Vie"], [6, "Sáb"], [0, "Dom"]];
+  const EXAMPLE = [
+    "07:00-07:30 ☀️ Despertar y desayuno",
+    "07:30-09:00 💼 Trabajo profundo",
+    "09:00-09:15 ☕ Pausa",
+    "09:15-12:30 💼 Trabajo",
+    "12:30-13:30 🍝 Almuerzo",
+    "13:30-17:00 📚 Estudio",
+    "18:00-19:00 🏋️ Gimnasio",
+    "19:00-20:30 🎮 Tiempo libre",
+    "20:30-21:30 🍽️ Cena",
+    "23:00-07:00 😴 Dormir",
+  ].join("\n");
+
+  const data = Object.assign(
+    { same: true, all: EXAMPLE, days: {}, order: "past-top", theme: "auto", bg: "solid", accent: "azul", recenter: true },
+    W.hashData() || {}
+  );
+  let day = new Date().getDay();
+
+  // Días
+  DAYS.forEach(([d, name]) => {
+    const b = document.createElement("button");
+    b.textContent = name;
+    b.dataset.d = d;
+    b.onclick = () => { day = d; render(); };
+    $("days").appendChild(b);
+  });
+
+  // Colores
+  Object.entries(W.ACCENTS).forEach(([name, color]) => {
+    const b = document.createElement("button");
+    b.className = "swatch";
+    b.style.background = color;
+    b.title = name;
+    b.dataset.v = name;
+    b.onclick = () => { data.accent = name; render(); };
+    $("colors").appendChild(b);
+  });
+
+  // Botones de opciones (orden, tema, fondo)
+  document.querySelectorAll(".seg").forEach((seg) => {
+    seg.querySelectorAll("button").forEach((b) => {
+      b.onclick = () => { data[seg.dataset.key] = b.dataset.v; render(); };
+    });
+  });
+
+  $("same").onchange = (e) => {
+    data.same = e.target.checked;
+    // Al pasar a horarios por día, cada día arranca con el horario general.
+    if (!data.same) DAYS.forEach(([d]) => { if (!data.days[d]) data.days[d] = data.all; });
+    render();
+  };
+  $("text").oninput = (e) => {
+    if (data.same) data.all = e.target.value;
+    else data.days[day] = e.target.value;
+    render(true);
+  };
+  $("copyDay").onclick = () => {
+    DAYS.forEach(([d]) => (data.days[d] = data.days[day] || ""));
+    render();
+  };
+  $("recenter").onchange = (e) => { data.recenter = e.target.checked; render(); };
+  $("simulate").onchange = (e) => { $("simTime").disabled = !e.target.checked; render(); };
+  $("simTime").oninput = () => render();
+
+  function render(fromTyping) {
+    W.applyLook(data);
+    const text = data.same ? data.all : data.days[day] || "";
+    if (!fromTyping) $("text").value = text;
+    $("text").placeholder = "08:00-09:30 Gimnasio\n09:30-13:00 Trabajo";
+
+    $("same").checked = data.same;
+    $("recenter").checked = data.recenter !== false;
+    $("days").style.display = data.same ? "none" : "";
+    $("copyRow").style.display = data.same ? "none" : "";
+    $("dayLabel").textContent = data.same ? "" : "· " + DAYS.find(([d]) => d === day)[1];
+    document.querySelectorAll("#days button").forEach((b) => {
+      b.classList.toggle("on", +b.dataset.d === day);
+      b.classList.toggle("filled", !!(data.days[b.dataset.d] || "").trim());
+    });
+    document.querySelectorAll(".seg").forEach((seg) =>
+      seg.querySelectorAll("button").forEach((b) => b.classList.toggle("on", data[seg.dataset.key] === b.dataset.v))
+    );
+    document.querySelectorAll(".swatch").forEach((b) => b.classList.toggle("on", b.dataset.v === data.accent));
+
+    const { errors } = Schedule.parse(text);
+    $("errors").textContent = errors.length
+      ? "No entendí: " + errors.map((e) => `línea ${e.line} ("${e.text}")`).join(", ")
+      : "";
+
+    // Solo se guarda lo que hace falta.
+    const out = { same: data.same, order: data.order, theme: data.theme, bg: data.bg, accent: data.accent };
+    if (data.same) out.all = data.all;
+    else out.days = data.days;
+    if (data.recenter === false) out.recenter = false;
+    const hash = "#data=" + W.encode(out);
+
+    const link = new URL("index.html", location.href).href + hash;
+    $("link").value = link;
+    history.replaceState(null, "", hash);
+
+    const q = new URLSearchParams();
+    if (!data.same) q.set("day", day);
+    if ($("simulate").checked) q.set("now", $("simTime").value);
+    const src = "index.html" + (q.toString() ? "?" + q : "") + hash;
+    if ($("preview").getAttribute("src") !== src) $("preview").setAttribute("src", src);
+
+    if (location.protocol === "file:") {
+      $("note").innerHTML = "Este link es de tu compu: sirve para probar en el navegador. Para Notion hay que publicar los widgets (último paso).";
+    }
+  }
+
+  $("copy").onclick = async () => {
+    const input = $("link");
+    try {
+      await navigator.clipboard.writeText(input.value);
+    } catch (e) {
+      input.select();
+      document.execCommand("copy");
+    }
+    $("copy").textContent = "¡Copiado!";
+    setTimeout(() => ($("copy").textContent = "Copiar link"), 1500);
+  };
+
+  render();
+</script>
+</body>
+</html>
